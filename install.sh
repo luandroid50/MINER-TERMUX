@@ -314,6 +314,14 @@ detect_worker_name() {
 generate_ccminer_json() {
     step "Configurando mineração"
 
+    # Detecta o número de núcleos de CPU disponíveis e usa TODOS por padrão,
+    # em vez de depender do comportamento implícito de "threads": 0.
+    local cpu_cores
+    cpu_cores="$(nproc 2>/dev/null)"
+    [ -z "$cpu_cores" ] && cpu_cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null)"
+    [ -z "$cpu_cores" ] && cpu_cores="$(grep -c ^processor /proc/cpuinfo 2>/dev/null)"
+    [ -z "$cpu_cores" ] && cpu_cores=4  # fallback conservador se nada funcionar
+
     cat > "$CCMINER_JSON" <<EOF
 {
     "pools":
@@ -327,7 +335,7 @@ generate_ccminer_json() {
     "user": "$WALLET.$WORKER",
     "pass": "",
     "algo": "$ALGO",
-    "threads": 0,
+    "threads": $cpu_cores,
     "cpu-priority": 1,
     "cpu-affinity": -1,
     "retry-pause": 10,
@@ -338,6 +346,7 @@ EOF
     log_ok "Pool configurada: $POOL_NAME ($POOL_HOST:$POOL_PORT)"
     log_ok "Carteira configurada: $(mask_wallet "$WALLET")"
     log_ok "Worker configurada: $WORKER"
+    log_ok "Threads configuradas: $cpu_cores (todos os núcleos detectados neste aparelho)"
     log_info "API do CCminer restrita a 127.0.0.1:4068 (não exposta na rede, por segurança)"
 }
 
@@ -532,6 +541,7 @@ Status:                 $status_txt
 Minerador:               CCminer (Darktron/pre-compiled)
 Diretório:               $MINER_DIR
 Algoritmo:                $ALGO
+Threads:                  $(nproc 2>/dev/null || echo "?") (todos os núcleos)
 Pool:                     $POOL_NAME
 Servidor:                 $POOL_HOST:$POOL_PORT
 Worker:                   $WORKER
@@ -598,6 +608,7 @@ show_status() {
  STATUS - VERUS TERMUX MINER
 --------------------------------------------------
 CCminer:        $miner_state
+Threads:        $(nproc 2>/dev/null || echo "?")
 SSH:            $ssh_state (porta $port)
 Pool:           $POOL_NAME ($POOL_HOST:$POOL_PORT)
 Worker:         $WORKER
