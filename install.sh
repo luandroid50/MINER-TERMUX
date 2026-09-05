@@ -166,6 +166,10 @@ install_dependencies() {
     command -v ip     >/dev/null 2>&1 || needed+=("iproute2")
     # coreutils quase sempre já vem com o Termux base; só instala se faltar algo básico como 'timeout'
     command -v timeout >/dev/null 2>&1 || needed+=("coreutils")
+    # libjansson é uma biblioteca dinâmica exigida em tempo de execução pelo
+    # binário do ccminer (Darktron/pre-compiled). Sem ela, o binário falha ao
+    # carregar com um erro que parece (mas não é) incompatibilidade de ABI.
+    dpkg -s libjansson >/dev/null 2>&1 || needed+=("libjansson")
 
     if [ "${#needed[@]}" -eq 0 ]; then
         log_ok "Todas as dependências já estão instaladas (nenhuma ação necessária)"
@@ -218,11 +222,22 @@ install_ccminer() {
     fi
     log_ok "CCminer baixado"
 
-    if "$CCMINER_BIN" -V >/dev/null 2>&1 || "$CCMINER_BIN" -h >/dev/null 2>&1; then
+    local exec_err
+    exec_err="$("$CCMINER_BIN" -V 2>&1 1>/dev/null)"
+    if [ -z "$exec_err" ] && "$CCMINER_BIN" -V >/dev/null 2>&1; then
+        log_ok "CCminer executável e responde corretamente"
+    elif "$CCMINER_BIN" -h >/dev/null 2>&1; then
         log_ok "CCminer executável e responde corretamente"
     else
-        log_error "O binário foi baixado, mas não conseguiu ser executado neste dispositivo (possível incompatibilidade de libc/ABI)."
-        log_error "Isso normalmente indica que o Termux está desatualizado. Rode: pkg upgrade -y  e tente de novo."
+        log_error "O binário foi baixado, mas não conseguiu ser executado neste dispositivo."
+        log_error "Mensagem original do sistema: ${exec_err:-<sem saída de erro>}"
+        if printf '%s' "$exec_err" | grep -qi "not found\|cannot locate\|library"; then
+            log_error "Isso indica uma biblioteca dinâmica faltando (não é incompatibilidade de arquitetura)."
+            log_error "Tente: pkg install libjansson -y   e rode ./install.sh de novo."
+        else
+            log_error "Rode manualmente para ver o erro completo: $CCMINER_BIN -V"
+            log_error "Se o Termux estiver desatualizado, rode: pkg update -y && pkg upgrade -y"
+        fi
         exit 1
     fi
 
