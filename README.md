@@ -14,6 +14,7 @@ repositório).
 2. No Termux:
 
 ```bash
+wget -O install.sh https://raw.githubusercontent.com/luandroid50/MINER-TERMUX/main/install.sh
 chmod +x install.sh
 ./install.sh
 ```
